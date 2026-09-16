@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hospital Evacuation Decision Dashboard (RESEARCH DATA)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: {
+              950: "#071427",
+              900: "#0B1F3A",
+              800: "#122A4A",
+              700: "#1B3A63",
+              600: "#2A4F7A"
+            },
+            ice: {
+              50: "#F7F9FC",
+              100: "#EEF2F7",
+              200: "#DDE4EE",
+              300: "#C5D0DE",
+              400: "#8A97AB",
+              500: "#5C6B82"
+            }
+          },
+          fontFamily: {
+            sans: ['"Source Sans 3"', "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"],
+            serif: ['"Source Serif 4"', "Georgia", "serif"]
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --navy: #0B1F3A;
+      --risk-low: #1F7A4D;
+      --risk-medium: #C05621;
+      --risk-high: #C53030;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      background: #EEF2F7;
+      color: #0B1F3A;
+    }
+    .app-shell {
+      min-height: 100%;
+    }
+    @media (min-width: 1024px) {
+      html, body {
+        overflow: hidden;
+      }
+      .app-shell {
+        height: 100vh;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+    }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #DDE4EE;
+      box-shadow: 0 1px 2px rgba(11, 31, 58, 0.04);
+    }
+    .seg-btn {
+      border: 1px solid #C5D0DE;
+      background: #ffffff;
+      color: #1B3A63;
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+    .seg-btn:hover {
+      border-color: #2A4F7A;
+    }
+    .seg-btn.is-active {
+      background: #0B1F3A;
+      border-color: #0B1F3A;
+      color: #ffffff;
+    }
+    .kpi-value {
+      font-variant-numeric: tabular-nums;
+    }
+    #evac-map {
+      background: #F7F9FC;
+    }
+    .leaflet-container {
+      font-family: "Source Sans 3", Segoe UI, sans-serif;
+      background: #F7F9FC;
+    }
+    .zone-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      color: #0B1F3A;
+      font-weight: 700;
+      font-size: 11px;
+      text-align: center;
+    }
+    .zone-label::before,
+    .zone-sub::before {
+      display: none;
+    }
+    .zone-sub {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      color: #5C6B82;
+      font-weight: 600;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .schematic-watermark {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #C5D0DE;
+      color: #1B3A63;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 6px 8px;
+      border-radius: 2px;
+    }
+    .process-step {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .process-arrow {
+      color: #8A97AB;
+      font-weight: 700;
+      flex: 0 0 auto;
+      line-height: 1;
+      font-size: 0.7rem;
+    }
+    .flow-join {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      flex: 0 0 auto;
+      padding: 4px 0;
+    }
+    .flow-join .flow-shaft {
+      width: 1px;
+      height: 8px;
+      background: #0B1F3A;
+    }
+    .flow-join .flow-arrow {
+      color: #0B1F3A;
+      font-size: 0.7rem;
+      line-height: 1;
+      font-weight: 800;
+    }
+    .flow-join .flow-label {
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #0B1F3A;
+    }
+    .analysis-block-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .analysis-block-title::before {
+      content: "";
+      width: 3px;
+      height: 12px;
+      background: #0B1F3A;
+    }
+    .decision-card[data-pending="true"] {
+      border-color: #C5D0DE;
+      border-style: dashed;
+    }
+    .risk-pill[data-level="PENDING"] {
+      background: #EEF2F7;
+      color: #5C6B82;
+      border-color: #C5D0DE;
+    }
+    .signal-status-track {
+      display: flex;
+      gap: 4px;
+    }
+    .signal-status-track span {
+      border: 1px solid #C5D0DE;
+      color: #8A97AB;
+      background: #ffffff;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+    }
+    .decision-option {
+      border: 1px solid #C5D0DE;
+      background: #ffffff;
+      color: #5C6B82;
+      text-align: center;
+    }
+    .decision-option.is-active[data-level="LOW"] {
+      background: #E8F6EE;
+      border-color: var(--risk-low);
+      color: var(--risk-low);
+    }
+    .decision-option.is-active[data-level="MEDIUM"] {
+      background: #FEF3E8;
+      border-color: var(--risk-medium);
+      color: var(--risk-medium);
+    }
+    .decision-option.is-active[data-level="HIGH"] {
+      background: #FDECEC;
+      border-color: var(--risk-high);
+      color: var(--risk-high);
+    }
+    .kpi-strip article + article {
+      border-left: 1px solid #DDE4EE;
+    }
+    .op-badge {
+      display: inline-block;
+      margin-top: 1px;
+      padding: 0 4px;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.35;
+      border: 1px solid #0B1F3A;
+    }
+    .op-badge-1 {
+      background: #0B1F3A;
+      color: #ffffff;
+    }
+    .op-badge-2 {
+      background: #ffffff;
+      color: #0B1F3A;
+      border-style: dashed;
+    }
+    .ts-chart-wrap {
+      height: 128px;
+      position: relative;
+    }
+    .signal-bar {
+      height: 6px;
+      background: #EEF2F7;
+      overflow: hidden;
+    }
+    .signal-bar > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: repeating-linear-gradient(
+        90deg,
+        #C5D0DE 0,
+        #C5D0DE 6px,
+        #DDE4EE 6px,
+        #DDE4EE 12px
+      );
+    }
+    .decision-card[data-level="LOW"] {
+      border-color: var(--risk-low);
+    }
+    .decision-card[data-level="MEDIUM"] {
+      border-color: var(--risk-medium);
+    }
+    .decision-card[data-level="HIGH"] {
+      border-color: var(--risk-high);
+    }
+    .risk-pill[data-level="LOW"] {
+      background: #E8F6EE;
+      color: var(--risk-low);
+      border-color: #B7E0C6;
+    }
+    .risk-pill[data-level="MEDIUM"] {
+      background: #FEF3E8;
+      color: var(--risk-medium);
+      border-color: #F6D3B5;
+    }
+    .risk-pill[data-level="HIGH"] {
+      background: #FDECEC;
+      color: var(--risk-high);
+      border-color: #F5C2C2;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased">
+  <div class="app-shell">
+    <header class="bg-navy-900 text-white shrink-0">
+      <div class="h-full px-3 lg:px-4 py-2 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="font-serif text-lg lg:text-xl leading-tight truncate">Hospital Evacuation Decision Dashboard</h1>
+          <p class="text-ice-200 text-[11px] lg:text-xs truncate">AI-based Evacuation Risk Analysis for Long-term Care Hospitals</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="inline-flex items-center border border-amber-300 bg-amber-100 text-navy-900 text-[10px] font-bold tracking-wide uppercase px-2 py-0.5">RESEARCH DATA</span>
+          <span class="hidden sm:inline-flex items-center border border-ice-400 text-ice-100 text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5">Scenario averages only</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="bg-amber-50 border-b border-amber-200 text-navy-800 shrink-0">
+      <p class="px-3 lg:px-4 py-1 text-[11px] leading-snug">
+        <strong>RESEARCH DATA</strong> · Excel-filtered by Scenario, Occupancy, Run (seed), and Zone · Floor 3 is schematic / not to scale
+      </p>
+    </div>
+
+    <main class="flex-1 min-h-0 px-2 lg:px-3 py-2 flex flex-col gap-2">
+      <section class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[20%_50%_30%] gap-2">
+        <aside class="panel p-3 flex flex-col min-h-0 overflow-auto lg:overflow-hidden">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-[11px] tracking-[0.16em] uppercase font-bold text-ice-500">Control Panel</h2>
+            <span class="text-[9px] font-bold tracking-wide uppercase text-navy-700 bg-ice-100 px-1.5 py-0.5">UI only</span>
+          </div>
+
+          <div class="space-y-2.5">
+            <div>
+              <p class="text-[11px] font-semibold text-navy-800 mb-1">Scenario</p>
+              <div class="grid grid-cols-2 gap-1.5" id="scenario-group"></div>
+            </div>
+            <div>
+              <p class="text-[11px] font-semibold text-navy-800 mb-1">Occupancy</p>
+              <div class="grid grid-cols-3 gap-1.5" id="occupancy-group"></div>
+            </div>
+            <div>
+              <p class="text-[11px] font-semibold text-navy-800 mb-1">Zone</p>
+              <div class="grid grid-cols-4 gap-1.5" id="zone-group"></div>
+              <p class="text-[10px] text-ice-500 mt-1">Z09–Z11: stair access · OP1: Z01, Z02, Z04, Z05, Z07 · OP2: Z10, Z11</p>
+            </div>
+            <div>
+              <p class="text-[11px] font-semibold text-navy-800 mb-1">Run</p>
+              <div class="grid grid-cols-3 gap-1.5" id="run-group"></div>
+            </div>
+            <div class="border-t border-ice-200 pt-2">
+              <p class="text-[11px] font-semibold text-navy-800 mb-1">Simulation clock</p>
+              <div class="flex items-baseline justify-between">
+                <span class="text-[10px] uppercase tracking-wide text-ice-500">t (1-second CSV)</span>
+                <span id="clock-value" class="kpi-value text-sm font-semibold">—</span>
+              </div>
+              <input id="time-slider" type="range" min="0" max="0" value="0" disabled class="w-full mt-1 accent-navy-800" />
+              <p class="text-[10px] text-ice-500 mt-1 leading-snug">1-second <code class="text-navy-700">time_bin</code> for the selected zone. Source: Excel timeseries.</p>
+            </div>
+          </div>
+        </aside>
+
+        <section class="panel overflow-hidden flex flex-col min-h-[280px] lg:min-h-0">
+          <div class="px-3 py-1.5 border-b border-ice-200 flex items-center justify-between gap-2 shrink-0">
+            <div class="min-w-0">
+              <h2 class="text-[11px] tracking-[0.16em] uppercase font-bold text-ice-500">Evacuation Map</h2>
+              <p class="text-xs font-semibold text-navy-900 truncate">Floor 3 ring corridor · schematic / not to scale</p>
+            </div>
+            <div class="hidden md:flex items-center gap-2 text-[10px] text-navy-800 shrink-0">
+              <span class="inline-flex items-center gap-1"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#1F7A4D"></i> LOW</span>
+              <span class="inline-flex items-center gap-1"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#C05621"></i> MEDIUM</span>
+              <span class="inline-flex items-center gap-1"><i class="inline-block w-2.5 h-2.5 rounded-sm" style="background:#C53030"></i> HIGH</span>
+              <span class="text-ice-500">Z9–Z11 stair</span>
+              <span class="inline-flex items-center gap-1"><span class="op-badge op-badge-1">OP1</span> Early Instability</span>
+              <span class="inline-flex items-center gap-1"><span class="op-badge op-badge-2">OP2</span> Accumulation</span>
+            </div>
+          </div>
+          <div class="relative flex-1 min-h-0">
+            <div id="evac-map" class="absolute inset-0"></div>
+          </div>
+        </section>
+
+        <aside class="panel p-3 flex flex-col min-h-0 overflow-hidden">
+          <div class="flex items-center justify-between mb-1.5 shrink-0">
+            <h2 class="text-[11px] tracking-[0.16em] uppercase font-bold text-ice-500">Analysis</h2>
+            <span class="text-[9px] font-bold tracking-wide uppercase bg-amber-100 text-navy-900 px-1.5 py-0.5 whitespace-nowrap">RESEARCH DATA</span>
+          </div>
+
+          <div class="flex flex-col min-h-0 flex-1 justify-evenly">
+            <section class="shrink-0">
+              <h3 class="analysis-block-title text-xs font-bold text-navy-900 mb-1.5">Process</h3>
+              <div id="process-flow" class="flex items-stretch gap-0.5"></div>
+              <p class="text-[10px] text-ice-500 mt-1.5 leading-snug">OP1 = Early Instability · OP2 = Accumulation Onset. Times are from the selected Scenario / Occupancy / Run (seed).</p>
+            </section>
+
+            <div class="flow-join" aria-hidden="true">
+              <span class="flow-shaft"></span>
+              <span class="flow-arrow">▼</span>
+              <span class="flow-label">Signal</span>
+            </div>
+
+            <section class="shrink-0">
+              <h3 class="analysis-block-title text-xs font-bold text-navy-900 mb-1.5">Signal</h3>
+              <div id="signal-list" class="grid grid-cols-5 gap-1"></div>
+              <div class="ts-chart-wrap mt-2 border border-ice-200 bg-white">
+                <canvas id="ts-chart" aria-label="Time series analysis"></canvas>
+              </div>
+              <div class="mt-1.5 flex items-center justify-between gap-2">
+                <div class="signal-status-track" aria-label="Signal levels">
+                  <span>LOW</span>
+                  <span>MEDIUM</span>
+                  <span>HIGH</span>
+                </div>
+                <span id="risk-pill" class="risk-pill border text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 whitespace-nowrap" data-level="PENDING">NOT ASSESSED</span>
+              </div>
+            </section>
+
+            <div class="flow-join" aria-hidden="true">
+              <span class="flow-shaft"></span>
+              <span class="flow-arrow">▼</span>
+              <span class="flow-label">Decision</span>
+            </div>
+
+            <section class="shrink-0">
+              <h3 class="analysis-block-title text-xs font-bold text-navy-900 mb-1.5">Decision</h3>
+              <div id="decision-card" class="decision-card border-2 bg-ice-50 p-2" data-pending="true">
+                <div id="decision-options" class="grid grid-cols-3 gap-1 mb-1.5">
+                  <div class="decision-option text-[10px] font-bold px-1 py-1.5 leading-tight uppercase" data-action="Monitor" data-level="LOW">Monitor</div>
+                  <div class="decision-option text-[10px] font-bold px-1 py-1.5 leading-tight uppercase" data-action="Warning" data-level="MEDIUM">Warning</div>
+                  <div class="decision-option text-[10px] font-bold px-1 py-1.5 leading-tight uppercase" data-action="Distribute Evacuation" data-level="HIGH">Distribute Evacuation</div>
+                </div>
+                <p class="text-[10px] uppercase tracking-[0.12em] font-bold text-ice-500">Human decision authority</p>
+                <p id="decision-title" class="text-base font-serif font-semibold text-navy-900 leading-tight">Decision pending</p>
+                <p id="decision-copy" class="text-[11px] text-navy-700 mt-0.5 leading-snug">Decision pending — awaiting signal data</p>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel shrink-0">
+        <div class="px-3 py-1 border-b border-ice-200 flex items-center justify-between">
+          <h2 class="text-[11px] tracking-[0.16em] uppercase font-bold text-ice-500">Time metrics</h2>
+          <span class="text-[9px] font-bold tracking-wide uppercase bg-amber-100 text-navy-900 px-1.5 py-0.5">RESEARCH DATA</span>
+        </div>
+        <div id="kpi-grid" class="kpi-strip grid grid-cols-2 sm:grid-cols-6"></div>
+      </section>
+      <p class="shrink-0 text-center text-[11px] text-navy-700 italic px-2">AI detects precursor signals; human decision authority remains explicit.</p>
+    </main>
+  </div>
+
+  <script>
+    /* ============================================================================
+       DATA LAYER
+       Keep query keys, CSV parsing, and view-model assembly here.
+       Unreported metrics stay null and render as an em dash.
+       Partial research scenario means are applied only to OP1 / OP2 / Lead Time.
+       1-second CSV, when loaded, overrides matching fields.
+
+       Expected 1-second simulation CSV header (draft; adjust when data arrives):
+       t_sec,scenario,occupancy_pct,run_id,zone_id,delta_v,delta_q,density,inflow,outflow,evacuation_time,op1_time,op2_time,lead_time,bottleneck_duration,risk_level
+       ============================================================================ */
+
+    const DATA_STATUS = {
+      mode: "EXCEL",
+      disclaimer: "Research Excel: timeseries, OP1, OP2, and OP1→OP2 transition tables.",
+      schematicNote: "Floor 3 schematic / not to scale. Not an architectural drawing.",
+      csvUrl: null,
+      excelFiles: {
+        timeseries: "data/01_timeseries_all_runs.xlsx",
+        op1: "data/02_OP1_summary.xlsx",
+        op2: "data/04_OP2_summary.xlsx",
+        transition: "data/05_OP1_OP2_transition.xlsx"
+      },
+      timestepSeconds: 1
+    };
+
+    const OP1_PRIMARY_ZONES = new Set(["Z01", "Z02", "Z04", "Z05", "Z07"]);
+    const OP2_PRIMARY_ZONES = new Set(["Z10", "Z11"]);
+
+    const CONTROL_OPTIONS = {
+      scenarios: ["A", "B"],
+      occupancies: ["100%", "75%", "50%"],
+      zones: ["Z01", "Z02", "Z03", "Z04", "Z05", "Z06", "Z07", "Z08", "Z09", "Z10", "Z11", "Z12"],
+      runs: ["1", "2", "3", "4", "5"]
+    };
+
+    const STAIR_ZONES = new Set(["Z09", "Z9", "Z10", "Z11"]);
+
+    const PROCESS_STEPS = [
+      { id: "delta_v", label: "Δv 증가", metricKey: "deltaV", caption: "" },
+      { id: "op1", label: "OP1", metricKey: "op1Time", caption: "Early Instability" },
+      { id: "lead_time", label: "Lead Time", metricKey: "leadTime", caption: "" },
+      { id: "dq_flow", label: "Δq / In-Out", metricKey: "deltaQ", caption: "유입·유출 불균형" },
+      { id: "op2", label: "OP2", metricKey: "op2Time", caption: "Accumulation Onset" },
+      { id: "congestion", label: "Congestion Risk", metricKey: "congestionRisk", caption: "" }
+    ];
+
+    const SIGNAL_FIELDS = [
+      { key: "deltaV", label: "Δv" },
+      { key: "deltaQ", label: "Δq" },
+      { key: "inflow", label: "Inflow" },
+      { key: "outflow", label: "Outflow" },
+      { key: "avgSpeed", label: "Avg Speed" }
+    ];
+
+    const KPI_FIELDS = [
+      { key: "op1Time", label: "OP1 Time" },
+      { key: "op1Zone", label: "OP1 Zone" },
+      { key: "op2Time", label: "OP2 Time" },
+      { key: "op2Zone", label: "OP2 Zone" },
+      { key: "leadTime", label: "Lead Time" },
+      { key: "evacuationTime", label: "Total Evacuation Time" }
+    ];
+
+    const DECISION_COPY = {
+      LOW: {
+        action: "Monitor",
+        copy: "UI mapping for a LOW demo state: continue observation. No measured signal is available in this build."
+      },
+      MEDIUM: {
+        action: "Warning",
+        copy: "UI mapping for a MEDIUM demo state: prepare corridor management. This is not an operational alert from simulation."
+      },
+      HIGH: {
+        action: "Distribute Evacuation",
+        copy: "UI mapping for a HIGH demo state: illustrate load redistribution toward stair-access zones. Not a computed recommendation."
+      }
+    };
+
+    const EMPTY_METRICS = Object.freeze({
+      tSec: null,
+      deltaV: null,
+      deltaQ: null,
+      density: null,
+      inflow: null,
+      outflow: null,
+      avgSpeed: null,
+      evacuationTime: null,
+      op1Time: null,
+      op1Zone: null,
+      op2Time: null,
+      op2Zone: null,
+      leadTime: null,
+      congestionRisk: null,
+      bottleneckDuration: null,
+      dvStar: null,
+      riskLevelFromData: null
+    });
+
+    function createEmptyStore() {
+      return {
+        source: "DEMO",
+        rows: [],
+        byKey: new Map(),
+        tMin: null,
+        tMax: null
+      };
+    }
+
+    function occupancyToNumber(label) {
+      return Number(String(label).replace("%", ""));
+    }
+
+    function toGeomZone(zoneId) {
+      var n = Number(String(zoneId).replace("Z", ""));
+      return Number.isFinite(n) ? ("Z" + n) : zoneId;
+    }
+
+    function makeScenarioId(scenario, occupancyLabel, seed) {
+      return scenario + "_" + occupancyToNumber(occupancyLabel) + "_seed" + seed;
+    }
+
+    function workbookToRows(workbook, preferredSheet) {
+      var name = preferredSheet && workbook.Sheets[preferredSheet] ? preferredSheet : workbook.SheetNames[0];
+      return XLSX.utils.sheet_to_json(workbook.Sheets[name], { defval: null, raw: true });
+    }
+
+    async function fetchWorkbook(url) {
+      var response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to load " + url + " (" + response.status + ")");
+      var buf = await response.arrayBuffer();
+      return XLSX.read(buf, { type: "array" });
+    }
+
+    function indexByScenarioId(rows) {
+      var map = new Map();
+      rows.forEach(function (row) {
+        map.set(String(row.scenario_id), row);
+      });
+      return map;
+    }
+
+    function buildExcelIndex(raw) {
+      var tsByZone = new Map();
+      var tMaxByRun = new Map();
+      raw.timeseries.forEach(function (row) {
+        var sid = String(row.scenario_id);
+        var zid = String(row.zone_id);
+        var key = sid + "|" + zid;
+        if (!tsByZone.has(key)) tsByZone.set(key, []);
+        tsByZone.get(key).push(row);
+        var t = Number(row.time_bin);
+        if (Number.isFinite(t)) {
+          var prev = tMaxByRun.get(sid);
+          if (prev === undefined || t > prev) tMaxByRun.set(sid, t);
+        }
+      });
+      tsByZone.forEach(function (arr) {
+        arr.sort(function (a, b) { return Number(a.time_bin) - Number(b.time_bin); });
+      });
+      return {
+        timeseries: raw.timeseries,
+        tsByZone: tsByZone,
+        tMaxByRun: tMaxByRun,
+        op1ByRun: indexByScenarioId(raw.op1),
+        op2ByRun: indexByScenarioId(raw.op2),
+        transitionByRun: indexByScenarioId(raw.transition)
+      };
+    }
+
+    function nearestTimeRow(rows, tSec) {
+      if (!rows || !rows.length) return null;
+      if (tSec === null || tSec === undefined) return rows[rows.length - 1];
+      var nearest = rows[0];
+      var best = Math.abs(Number(rows[0].time_bin) - tSec);
+      for (var i = 1; i < rows.length; i += 1) {
+        var d = Math.abs(Number(rows[i].time_bin) - tSec);
+        if (d < best) {
+          best = d;
+          nearest = rows[i];
+        }
+      }
+      return nearest;
+    }
+
+    let excelIndex = null;
+
+    function rowKey(row) {
+      return [row.scenario, row.occupancyPct, row.runId, row.zoneId, row.tSec].join("|");
+    }
+
+    function parseNumberOrNull(value) {
+      if (value === undefined || value === null || value === "") return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function parseSimulationCsv(text) {
+      const lines = String(text).replace(/^\uFEFF/, "").trim().split(/\r?\n/);
+      if (lines.length < 2) {
+        return createEmptyStore();
+      }
+      const headers = lines[0].split(",").map(function (h) { return h.trim(); });
+      const index = {};
+      headers.forEach(function (h, i) { index[h] = i; });
+      const store = createEmptyStore();
+      store.source = "CSV";
+      var tMin = Infinity;
+      var tMax = -Infinity;
+
+      for (var i = 1; i < lines.length; i += 1) {
+        if (!lines[i].trim()) continue;
+        var cols = lines[i].split(",");
+        var row = {
+          tSec: parseNumberOrNull(cols[index.t_sec]),
+          scenario: (cols[index.scenario] || "").trim(),
+          occupancyPct: parseNumberOrNull(cols[index.occupancy_pct]),
+          runId: (cols[index.run_id] || "").trim(),
+          zoneId: (cols[index.zone_id] || "").trim(),
+          deltaV: parseNumberOrNull(cols[index.delta_v]),
+          deltaQ: parseNumberOrNull(cols[index.delta_q]),
+          density: parseNumberOrNull(cols[index.density]),
+          inflow: parseNumberOrNull(cols[index.inflow]),
+          outflow: parseNumberOrNull(cols[index.outflow]),
+          evacuationTime: parseNumberOrNull(cols[index.evacuation_time]),
+          op1Time: parseNumberOrNull(cols[index.op1_time]),
+          op2Time: parseNumberOrNull(cols[index.op2_time]),
+          leadTime: parseNumberOrNull(cols[index.lead_time]),
+          bottleneckDuration: parseNumberOrNull(cols[index.bottleneck_duration]),
+          riskLevelFromData: (cols[index.risk_level] || "").trim() || null
+        };
+        store.rows.push(row);
+        store.byKey.set(rowKey(row), row);
+        if (row.tSec !== null) {
+          if (row.tSec < tMin) tMin = row.tSec;
+          if (row.tSec > tMax) tMax = row.tSec;
+        }
+      }
+      store.tMin = Number.isFinite(tMin) ? tMin : null;
+      store.tMax = Number.isFinite(tMax) ? tMax : null;
+      return store;
+    }
+
+    async function loadSimulationCsv(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error("Failed to load simulation CSV: " + response.status);
+      }
+      const text = await response.text();
+      return parseSimulationCsv(text);
+    }
+
+    function querySimulation(store, controls, tSec) {
+      if (!store || !store.rows.length) return null;
+      var occupancyPct = occupancyToNumber(controls.occupancy);
+      var wanted = {
+        tSec: tSec,
+        scenario: controls.scenario,
+        occupancyPct: occupancyPct,
+        runId: controls.run,
+        zoneId: controls.zone
+      };
+      var exact = store.byKey.get(rowKey(wanted));
+      if (exact) return exact;
+      var matches = store.rows.filter(function (row) {
+        return row.scenario === controls.scenario &&
+          row.occupancyPct === occupancyPct &&
+          row.runId === controls.run &&
+          row.zoneId === controls.zone;
+      });
+      if (!matches.length) return null;
+      matches.sort(function (a, b) { return a.tSec - b.tSec; });
+      if (tSec === null || tSec === undefined) return matches[matches.length - 1];
+      var nearest = matches[0];
+      var best = Math.abs(matches[0].tSec - tSec);
+      for (var i = 1; i < matches.length; i += 1) {
+        var d = Math.abs(matches[i].tSec - tSec);
+        if (d < best) {
+          best = d;
+          nearest = matches[i];
+        }
+      }
+      return nearest;
+    }
+
+    function demoUiRiskLevel(zoneId, controls) {
+      /* Visual demonstration only: cycles legend/decision styling.
+         This is NOT a risk model and MUST NOT be cited as analysis. */
+      var occupancy = occupancyToNumber(controls.occupancy);
+      var score = 0;
+      if (controls.scenario === "B") score += 1;
+      if (occupancy === 100) score += 1;
+      if (STAIR_ZONES.has(zoneId)) score += 1;
+      if (controls.run === "R3" && STAIR_ZONES.has(zoneId)) score += 1;
+      if (score >= 3) return "HIGH";
+      if (score >= 1) return "MEDIUM";
+      return "LOW";
+    }
+
+    function getViewModel(controls, store, tSec) {
+      var metrics = Object.assign({}, EMPTY_METRICS);
+      var hasCsv = !!(store && store.rows.length);
+      var series = [];
+      var tMin = null;
+      var tMax = null;
+      var sid = makeScenarioId(controls.scenario, controls.occupancy, controls.run);
+
+      if (excelIndex) {
+        var rows = excelIndex.tsByZone.get(sid + "|" + controls.zone) || [];
+        series = rows;
+        if (rows.length) {
+          tMin = Number(rows[0].time_bin);
+          tMax = Number(rows[rows.length - 1].time_bin);
+        }
+        if ((tSec === null || tSec === undefined) && tMin !== null) tSec = tMin;
+        var op1 = excelIndex.op1ByRun.get(sid);
+        var op2 = excelIndex.op2ByRun.get(sid);
+        var tr = excelIndex.transitionByRun.get(sid);
+        if (op1) {
+          metrics.op1Time = parseNumberOrNull(op1.t_OP1);
+          metrics.op1Zone = op1.OP1_zone || null;
+        }
+        if (op2) {
+          metrics.op2Time = parseNumberOrNull(op2.t_OP2);
+          metrics.op2Zone = op2.OP2_zone || null;
+        }
+        if (tr && tr.delta_t_OP1_OP2 !== null && tr.delta_t_OP1_OP2 !== undefined) {
+          metrics.leadTime = parseNumberOrNull(tr.delta_t_OP1_OP2);
+        } else if (metrics.op1Time !== null && metrics.op2Time !== null) {
+          metrics.leadTime = metrics.op2Time - metrics.op1Time;
+        }
+        var runMax = excelIndex.tMaxByRun.get(sid);
+        metrics.evacuationTime = runMax === undefined ? null : runMax;
+        var sample = nearestTimeRow(rows, tSec);
+        if (sample) {
+          metrics.tSec = parseNumberOrNull(sample.time_bin);
+          metrics.deltaV = parseNumberOrNull(sample.dv);
+          metrics.deltaQ = parseNumberOrNull(sample.delta_q);
+          metrics.inflow = parseNumberOrNull(sample.q_in);
+          metrics.outflow = parseNumberOrNull(sample.q_out);
+          metrics.avgSpeed = parseNumberOrNull(sample.avg_speed);
+          metrics.dvStar = parseNumberOrNull(sample.dv_star);
+        }
+      }
+
+      if (hasCsv) {
+        var record = querySimulation(store, controls, tSec);
+        if (record) {
+          Object.keys(record).forEach(function (key) {
+            if (record[key] !== null && record[key] !== undefined && record[key] !== "") {
+              metrics[key] = record[key];
+            }
+          });
+        }
+      }
+
+      var resolvedT = tSec;
+      if (resolvedT === null || resolvedT === undefined) {
+        resolvedT = metrics.tSec;
+      }
+      if (tMin !== null && tMax !== null && (resolvedT === null || resolvedT < tMin || resolvedT > tMax)) {
+        resolvedT = tMin;
+        var resample = nearestTimeRow(series, resolvedT);
+        if (resample) {
+          metrics.tSec = parseNumberOrNull(resample.time_bin);
+          metrics.deltaV = parseNumberOrNull(resample.dv);
+          metrics.deltaQ = parseNumberOrNull(resample.delta_q);
+          metrics.inflow = parseNumberOrNull(resample.q_in);
+          metrics.outflow = parseNumberOrNull(resample.q_out);
+          metrics.avgSpeed = parseNumberOrNull(resample.avg_speed);
+          metrics.dvStar = parseNumberOrNull(resample.dv_star);
+        }
+      }
+
+      var assessedRisk = metrics.riskLevelFromData || null;
+      return {
+        controls: controls,
+        scenarioId: sid,
+        isDemo: !excelIndex && !hasCsv,
+        hasCsv: hasCsv,
+        sourceLabel: excelIndex ? "EXCEL" : (hasCsv ? "CSV" : "NO DATA"),
+        tSec: resolvedT === null || resolvedT === undefined ? metrics.tSec : resolvedT,
+        tMin: tMin,
+        tMax: tMax,
+        series: series,
+        dvStar: metrics.dvStar,
+        op1Time: metrics.op1Time,
+        op2Time: metrics.op2Time,
+        metrics: metrics,
+        assessedRisk: assessedRisk,
+        riskLevel: assessedRisk,
+        decision: assessedRisk ? (DECISION_COPY[assessedRisk] || null) : null,
+        zoneRisk: CONTROL_OPTIONS.zones.reduce(function (acc, zoneId) {
+          acc[zoneId] = demoUiRiskLevel(zoneId, controls);
+          return acc;
+        }, {})
+      };
+    }
+
+    function formatMetric(value) {
+      if (value === null || value === undefined || value === "") return "—";
+      if (typeof value === "number" && Number.isFinite(value) && !Number.isInteger(value)) {
+        return Math.abs(value) >= 1 ? value.toFixed(2) : value.toFixed(4);
+      }
+      return String(value);
+    }
+
+    function formatSeconds(value) {
+      if (value === null || value === undefined || value === "") return "—";
+      var n = Number(value);
+      if (!Number.isFinite(n)) return "—";
+      return (Number.isInteger(n) ? String(n) : n.toFixed(1)) + " s";
+    }
+
+    function isTimeMetricKey(key) {
+      return key === "op1Time" || key === "op2Time" || key === "leadTime" || key === "evacuationTime";
+    }
+
+    function formatKpi(field, value) {
+      if (field.key === "op1Zone" || field.key === "op2Zone") return formatMetric(value);
+      if (isTimeMetricKey(field.key)) return formatSeconds(value);
+      return formatMetric(value);
+    }
+
+    /* ============================================================================
+       SCHEMATIC GEOMETRY (CRS.Simple, not geographic, not to scale)
+       Coordinates are abstract drawing units for a rectangular ring corridor.
+       ============================================================================ */
+
+    function xy(x, y) {
+      return [y, x];
+    }
+
+    const SCHEMATIC = {
+      bounds: [xy(0, 0), xy(140, 100)],
+      building: [
+        xy(8, 8), xy(132, 8), xy(132, 92), xy(8, 92)
+      ],
+      courtyard: [
+        xy(40, 34), xy(100, 34), xy(100, 66), xy(40, 66)
+      ],
+      corridor: [
+        xy(26, 26), xy(114, 26), xy(114, 74), xy(26, 74)
+      ],
+      zones: {
+        Z1:  [[10, 74], [40, 74], [40, 90], [10, 90]],
+        Z2:  [[40, 74], [70, 74], [70, 90], [40, 90]],
+        Z3:  [[70, 74], [100, 74], [100, 90], [70, 90]],
+        Z4:  [[100, 74], [130, 74], [130, 90], [100, 90]],
+        Z5:  [[114, 50], [130, 50], [130, 74], [114, 74]],
+        Z6:  [[114, 26], [130, 26], [130, 50], [114, 50]],
+        Z7:  [[100, 10], [130, 10], [130, 26], [100, 26]],
+        Z8:  [[70, 10], [100, 10], [100, 26], [70, 26]],
+        Z9:  [[40, 10], [70, 10], [70, 26], [40, 26]],
+        Z10: [[10, 10], [40, 10], [40, 26], [10, 26]],
+        Z11: [[10, 26], [26, 26], [26, 50], [10, 50]],
+        Z12: [[10, 50], [26, 50], [26, 74], [10, 74]]
+      }
+    };
+
+    function toLatLngs(points) {
+      return points.map(function (p) { return xy(p[0], p[1]); });
+    }
+
+    const RISK_FILL = {
+      LOW: "#1F7A4D",
+      MEDIUM: "#C05621",
+      HIGH: "#C53030"
+    };
+
+    /* ============================================================================
+       APPLICATION STATE + UI
+       ============================================================================ */
+
+    const state = {
+      scenario: "A",
+      occupancy: "100%",
+      zone: "Z01",
+      run: "1",
+      tSec: null,
+      store: createEmptyStore()
+    };
+
+    let map = null;
+    const zoneLayers = {};
+    const zoneLabels = {};
+
+    function renderSegmentGroup(containerId, values, selected, onSelect) {
+      const root = document.getElementById(containerId);
+      root.innerHTML = "";
+      values.forEach(function (value) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "seg-btn px-1.5 py-1.5 " + (value === selected ? "is-active" : "");
+        btn.textContent = value;
+        if (STAIR_ZONES.has(value)) {
+          btn.title = "Stair-access zone (schematic)";
+        }
+        btn.addEventListener("click", function () { onSelect(value); });
+        root.appendChild(btn);
+      });
+    }
+
+    function renderControls() {
+      renderSegmentGroup("scenario-group", CONTROL_OPTIONS.scenarios, state.scenario, function (v) {
+        state.scenario = v;
+        refresh();
+      });
+      renderSegmentGroup("occupancy-group", CONTROL_OPTIONS.occupancies, state.occupancy, function (v) {
+        state.occupancy = v;
+        refresh();
+      });
+      renderSegmentGroup("zone-group", CONTROL_OPTIONS.zones, state.zone, function (v) {
+        state.zone = v;
+        refresh();
+      });
+      renderSegmentGroup("run-group", CONTROL_OPTIONS.runs, state.run, function (v) {
+        state.run = v;
+        refresh();
+      });
+    }
+
+    function initMap() {
+      map = L.map("evac-map", {
+        crs: L.CRS.Simple,
+        minZoom: -1,
+        maxZoom: 3,
+        zoomSnap: 0.25,
+        attributionControl: false,
+        zoomControl: true
+      });
+
+      map.whenReady(function () {
+        const svgEl = document.querySelector("#evac-map .leaflet-overlay-pane svg");
+        if (!svgEl || svgEl.querySelector("#stair-hatch")) return;
+        const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+        defs.innerHTML = '<pattern id="stair-hatch" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-1,1 l2,-2 M0,8 l8,-8 M7,9 l2,-2" stroke="#0B1F3A" stroke-width="1.1" stroke-opacity="0.4"></path></pattern>';
+        svgEl.insertBefore(defs, svgEl.firstChild);
+      });
+
+      L.polygon(SCHEMATIC.building, {
+        color: "#0B1F3A",
+        weight: 2,
+        fillColor: "#EEF2F7",
+        fillOpacity: 1,
+        interactive: false
+      }).addTo(map);
+
+      L.polygon(SCHEMATIC.corridor, {
+        color: "#8A97AB",
+        weight: 1,
+        fillColor: "#F7F9FC",
+        fillOpacity: 1,
+        interactive: false
+      }).addTo(map);
+
+      L.polygon(SCHEMATIC.courtyard, {
+        color: "#C5D0DE",
+        weight: 1,
+        dashArray: "4 3",
+        fillColor: "#ffffff",
+        fillOpacity: 1,
+        interactive: false
+      }).addTo(map);
+
+        L.marker(xy(70, 52), {
+        icon: L.divIcon({
+          className: "zone-sub",
+          html: "Core / void<br/>schematic",
+          iconSize: [110, 28]
+        }),
+        interactive: false,
+        keyboard: false
+      }).addTo(map);
+      L.marker(xy(70, 40), {
+        icon: L.divIcon({
+          className: "zone-sub",
+          html: "RING CORRIDOR",
+          iconSize: [110, 16]
+        }),
+        interactive: false,
+        keyboard: false
+      }).addTo(map);
+
+      CONTROL_OPTIONS.zones.forEach(function (zoneId) {
+        const geomId = toGeomZone(zoneId);
+        const layer = L.polygon(toLatLngs(SCHEMATIC.zones[geomId]), {
+          color: "#0B1F3A",
+          weight: 1.25,
+          fillColor: "#DDE4EE",
+          fillOpacity: 0.55,
+          className: STAIR_ZONES.has(zoneId) ? "stair-zone" : "room-zone"
+        }).addTo(map);
+
+        layer.on("click", function () {
+          state.zone = zoneId;
+          refresh();
+        });
+
+        zoneLayers[zoneId] = layer;
+
+        const ring = SCHEMATIC.zones[geomId];
+        const cx = (ring[0][0] + ring[1][0]) / 2;
+        const cy = (ring[0][1] + ring[2][1]) / 2;
+        var labelHtml = zoneId;
+        if (STAIR_ZONES.has(zoneId)) labelHtml += "<div class='zone-sub'>Stair access</div>";
+        if (OP1_PRIMARY_ZONES.has(zoneId)) labelHtml += "<div class='op-badge op-badge-1'>OP1</div>";
+        if (OP2_PRIMARY_ZONES.has(zoneId)) labelHtml += "<div class='op-badge op-badge-2'>OP2</div>";
+        zoneLabels[zoneId] = L.marker(xy(cx, cy + 1.2), {
+          icon: L.divIcon({
+            className: "zone-label",
+            html: labelHtml,
+            iconSize: [72, 42]
+          }),
+          interactive: false
+        }).addTo(map);
+      });
+
+      L.control.attribution({ prefix: false }).addAttribution("Schematic / Not to Scale · RESEARCH DATA").addTo(map);
+
+      const watermark = L.control({ position: "bottomleft" });
+      watermark.onAdd = function () {
+        const div = L.DomUtil.create("div", "schematic-watermark");
+        div.innerHTML = "Schematic · Not to scale";
+        return div;
+      };
+      watermark.addTo(map);
+
+      map.fitBounds(SCHEMATIC.bounds, { padding: [12, 12] });
+      setTimeout(function () { map.invalidateSize(); }, 0);
+    }
+
+    function updateMap(view) {
+      CONTROL_OPTIONS.zones.forEach(function (zoneId) {
+        const level = view.zoneRisk[zoneId] || "LOW";
+        const selected = zoneId === view.controls.zone;
+        zoneLayers[zoneId].setStyle({
+          fillColor: RISK_FILL[level],
+          fillOpacity: selected ? 0.78 : 0.42,
+          color: selected ? "#071427" : "#0B1F3A",
+          weight: selected ? 3 : (STAIR_ZONES.has(zoneId) ? 2 : 1.25),
+          dashArray: STAIR_ZONES.has(zoneId) ? "5 3" : null,
+          className: STAIR_ZONES.has(zoneId) ? "stair-zone" : "room-zone"
+        });
+        if (STAIR_ZONES.has(zoneId) && zoneLayers[zoneId]._path) {
+          zoneLayers[zoneId]._path.setAttribute("fill", RISK_FILL[level]);
+          zoneLayers[zoneId]._path.style.fill = RISK_FILL[level];
+        }
+      });
+    }
+
+    function renderProcess(view) {
+      const root = document.getElementById("process-flow");
+      root.innerHTML = "";
+      PROCESS_STEPS.forEach(function (step, index) {
+        const card = document.createElement("div");
+        card.className = "process-step border border-ice-200 bg-white px-1 py-1 text-center";
+        if (step.id === "bottleneck" && STAIR_ZONES.has(view.controls.zone)) {
+          card.classList.add("ring-1", "ring-navy-700");
+        }
+        var raw = view.metrics[step.metricKey];
+        var display = isTimeMetricKey(step.metricKey) ? formatSeconds(raw) : formatMetric(raw);
+        card.innerHTML =
+          '<p class="text-[9px] uppercase tracking-wide text-ice-500 font-bold leading-tight">' + step.label + '</p>' +
+          '<p class="kpi-value text-xs font-semibold text-navy-900 leading-tight">' + display + '</p>' +
+          (step.caption ? '<p class="text-[8px] text-navy-700 font-semibold leading-tight">' + step.caption + '</p>' : '');
+        root.appendChild(card);
+        if (index < PROCESS_STEPS.length - 1) {
+          const arrow = document.createElement("div");
+          arrow.className = "process-arrow self-center";
+          arrow.setAttribute("aria-hidden", "true");
+          arrow.textContent = "→";
+          root.appendChild(arrow);
+        }
+      });
+    }
+
+    function renderSignals(view) {
+      const root = document.getElementById("signal-list");
+      root.innerHTML = "";
+      SIGNAL_FIELDS.forEach(function (field) {
+        const row = document.createElement("div");
+        row.className = "border border-ice-200 bg-white px-1 py-1 text-center";
+        var raw = view.metrics[field.key];
+        var awaiting = raw === null || raw === undefined || raw === "";
+        row.innerHTML =
+          '<p class="text-[9px] font-bold text-navy-800 leading-tight">' + field.label + '</p>' +
+          '<p class="kpi-value text-xs font-semibold text-navy-900">' + (awaiting ? "—" : formatMetric(raw)) + '</p>' +
+          '<p class="text-[8px] text-ice-400 font-bold">' + (awaiting ? "—" : "t = " + (view.tSec === null ? "—" : view.tSec) + " s") + '</p>' +
+          '<div class="signal-bar mt-1"><span></span></div>';
+        root.appendChild(row);
+      });
+
+      const pill = document.getElementById("risk-pill");
+      if (view.assessedRisk) {
+        pill.dataset.level = view.assessedRisk;
+        pill.textContent = view.assessedRisk;
+      } else {
+        pill.dataset.level = "PENDING";
+        pill.textContent = "NOT ASSESSED";
+      }
+
+      const card = document.getElementById("decision-card");
+      var options = document.querySelectorAll("#decision-options .decision-option");
+      if (view.decision) {
+        card.dataset.pending = "false";
+        card.dataset.level = view.assessedRisk || "";
+        document.getElementById("decision-title").textContent = view.decision.action;
+        document.getElementById("decision-copy").textContent = view.decision.copy;
+        options.forEach(function (el) {
+          el.classList.toggle("is-active", el.getAttribute("data-action") === view.decision.action);
+        });
+      } else {
+        card.dataset.pending = "true";
+        card.removeAttribute("data-level");
+        document.getElementById("decision-title").textContent = "Decision pending";
+        document.getElementById("decision-copy").textContent = "Decision pending — awaiting signal data";
+        options.forEach(function (el) {
+          el.classList.remove("is-active");
+        });
+      }
+    }
+
+    function renderKpis(view) {
+      const root = document.getElementById("kpi-grid");
+      root.innerHTML = "";
+      KPI_FIELDS.forEach(function (field) {
+        const card = document.createElement("article");
+        card.className = "px-3 py-1.5 flex items-baseline justify-between gap-2";
+        var raw = view.metrics[field.key];
+        var display = formatKpi(field, raw);
+        card.innerHTML =
+          '<p class="text-[10px] uppercase tracking-[0.08em] font-bold text-ice-500 whitespace-nowrap">' + field.label + '</p>' +
+          '<p class="kpi-value text-lg font-serif font-semibold text-navy-900 leading-none">' + display + "</p>";
+        root.appendChild(card);
+      });
+    }
+
+    function renderClock(view) {
+      const clock = document.getElementById("clock-value");
+      clock.textContent = view.tSec === null || view.tSec === undefined ? "—" : String(view.tSec) + " s";
+      const slider = document.getElementById("time-slider");
+      if (view.tMin !== null && view.tMin !== undefined && view.tMax !== null && view.tMax !== undefined) {
+        slider.disabled = false;
+        slider.min = String(view.tMin);
+        slider.max = String(view.tMax);
+        slider.value = String(view.tSec !== null && view.tSec !== undefined ? view.tSec : view.tMin);
+      } else {
+        slider.disabled = true;
+        slider.min = "0";
+        slider.max = "0";
+        slider.value = "0";
+      }
+    }
+
+    let tsChart = null;
+
+    const tsMarkerPlugin = {
+      id: "researchMarkers",
+      afterDatasetsDraw: function (chart) {
+        var meta = chart.options.plugins.researchMarkers || {};
+        var xScale = chart.scales.x;
+        var yScale = chart.scales.y;
+        var ctx = chart.ctx;
+        if (!xScale || !yScale) return;
+        if (meta.dvStar !== null && meta.dvStar !== undefined && Number.isFinite(Number(meta.dvStar))) {
+          var y = yScale.getPixelForValue(Number(meta.dvStar));
+          ctx.save();
+          ctx.strokeStyle = "#0B1F3A";
+          ctx.setLineDash([4, 3]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(chart.chartArea.left, y);
+          ctx.lineTo(chart.chartArea.right, y);
+          ctx.stroke();
+          ctx.fillStyle = "#0B1F3A";
+          ctx.font = "10px Source Sans 3, sans-serif";
+          ctx.fillText("dv*", chart.chartArea.right - 22, y - 4);
+          ctx.restore();
+        }
+        function drawVert(t, color, label) {
+          if (t === null || t === undefined || !Number.isFinite(Number(t))) return;
+          var x = xScale.getPixelForValue(Number(t));
+          if (x < chart.chartArea.left || x > chart.chartArea.right) return;
+          ctx.save();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(x, chart.chartArea.top);
+          ctx.lineTo(x, chart.chartArea.bottom);
+          ctx.stroke();
+          ctx.fillStyle = color;
+          ctx.font = "10px Source Sans 3, sans-serif";
+          ctx.fillText(label, x + 3, chart.chartArea.top + 10);
+          ctx.restore();
+        }
+        drawVert(meta.op1, "#0B1F3A", "OP1");
+        drawVert(meta.op2, "#2A4F7A", "OP2");
+      }
+    };
+
+    function xySeries(rows, field) {
+      return rows.map(function (row) {
+        return { x: Number(row.time_bin), y: parseNumberOrNull(row[field]) };
+      });
+    }
+
+    function renderTimeSeriesChart(view) {
+      var canvas = document.getElementById("ts-chart");
+      if (!canvas || typeof Chart === "undefined") return;
+      var series = view.series || [];
+      var data = {
+        datasets: [
+          { label: "Δv", data: xySeries(series, "dv"), borderColor: "#0B1F3A", backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 0, spanGaps: true, yAxisID: "y" },
+          { label: "Avg speed", data: xySeries(series, "avg_speed"), borderColor: "#8A97AB", backgroundColor: "transparent", borderWidth: 1, pointRadius: 0, spanGaps: true, yAxisID: "y" },
+          { label: "Δq", data: xySeries(series, "delta_q"), borderColor: "#1B3A63", backgroundColor: "transparent", borderWidth: 1, pointRadius: 0, spanGaps: true, yAxisID: "y2" },
+          { label: "Inflow", data: xySeries(series, "q_in"), borderColor: "#5C6B82", backgroundColor: "transparent", borderWidth: 1, pointRadius: 0, borderDash: [3, 2], spanGaps: true, yAxisID: "y2" },
+          { label: "Outflow", data: xySeries(series, "q_out"), borderColor: "#C5D0DE", backgroundColor: "transparent", borderWidth: 1.2, pointRadius: 0, spanGaps: true, yAxisID: "y2" }
+        ]
+      };
+      var options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: true, labels: { boxWidth: 8, font: { size: 9 }, color: "#1B3A63" } },
+          researchMarkers: { dvStar: view.dvStar, op1: view.op1Time, op2: view.op2Time }
+        },
+        scales: {
+          x: {
+            type: "linear",
+            title: { display: true, text: "time_bin (s)", color: "#5C6B82", font: { size: 9 } },
+            ticks: { color: "#5C6B82", font: { size: 9 }, maxTicksLimit: 8 },
+            grid: { color: "#EEF2F7" }
+          },
+          y: {
+            position: "left",
+            ticks: { color: "#5C6B82", font: { size: 9 } },
+            grid: { color: "#EEF2F7" }
+          },
+          y2: {
+            position: "right",
+            grid: { drawOnChartArea: false },
+            ticks: { color: "#8A97AB", font: { size: 9 } }
+          }
+        }
+      };
+      if (tsChart) {
+        tsChart.data = data;
+        tsChart.options.plugins.researchMarkers = options.plugins.researchMarkers;
+        tsChart.update("none");
+        return;
+      }
+      Chart.register(tsMarkerPlugin);
+      tsChart = new Chart(canvas.getContext("2d"), { type: "line", data: data, options: options });
+    }
+
+    function refresh() {
+      renderControls();
+      const view = getViewModel(state, state.store, state.tSec);
+      if (view.tSec !== null && view.tSec !== undefined) state.tSec = view.tSec;
+      updateMap(view);
+      renderProcess(view);
+      renderSignals(view);
+      renderTimeSeriesChart(view);
+      renderKpis(view);
+      renderClock(view);
+      if (map) {
+        setTimeout(function () { map.invalidateSize(); }, 0);
+      }
+    }
+
+    window.addEventListener("resize", function () {
+      if (map) map.invalidateSize();
+    });
+
+    document.getElementById("time-slider").addEventListener("input", function (event) {
+      state.tSec = Number(event.target.value);
+      refresh();
+    });
+
+    async function loadResearchExcel() {
+      var files = DATA_STATUS.excelFiles;
+      var tsWb = await fetchWorkbook(files.timeseries);
+      var op1Wb = await fetchWorkbook(files.op1);
+      var op2Wb = await fetchWorkbook(files.op2);
+      var trWb = await fetchWorkbook(files.transition);
+      excelIndex = buildExcelIndex({
+        timeseries: workbookToRows(tsWb, "timeseries_all"),
+        op1: workbookToRows(op1Wb, "OP1_by_run"),
+        op2: workbookToRows(op2Wb, "OP2_by_run"),
+        transition: workbookToRows(trWb, "transition_by_run")
+      });
+      DATA_STATUS.mode = "EXCEL";
+      state.tSec = null;
+      refresh();
+      return excelIndex;
+    }
+
+    /* Public adapter: Excel is the primary source. CSV remains available. */
+    window.EvacuationData = {
+      status: DATA_STATUS,
+      parseSimulationCsv: parseSimulationCsv,
+      loadSimulationCsv: loadSimulationCsv,
+      querySimulation: querySimulation,
+      getViewModel: getViewModel,
+      loadResearchExcel: loadResearchExcel,
+      op1PrimaryZones: Array.from(OP1_PRIMARY_ZONES),
+      op2PrimaryZones: Array.from(OP2_PRIMARY_ZONES),
+      loadCsv: async function (url) {
+        const store = await loadSimulationCsv(url);
+        state.store = store;
+        DATA_STATUS.mode = "CSV";
+        DATA_STATUS.csvUrl = url;
+        state.tSec = store.tMin;
+        refresh();
+        return store;
+      }
+    };
+
+    initMap();
+    refresh();
+    loadResearchExcel().catch(function (err) {
+      console.error(err);
+      var clock = document.getElementById("clock-value");
+      if (clock) clock.textContent = "Excel load failed";
+    });
+  </script>
+</body>
+</html>
